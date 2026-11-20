@@ -16,11 +16,11 @@ comparan a medida que crece N:
 
 Requiere SWI-Prolog 9 o superior.
 
-```
-cd nreinas-extra
+```prolog
+cd NQueens_extra-main
 swipl main.pl
 ?- demo(8).        % resuelve N = 8 con las dos técnicas y escribe tablero.html
-?- demo(30).       % cualquier N
+?- demo(30).       % prueba con otro tamaño
 ?- comparar.       % tabla de comparación en pantalla y en resultados.md
 ```
 
@@ -28,7 +28,7 @@ swipl main.pl
 
 Tests (18, con plunit):
 
-```
+```bash
 swipl -g run_tests -t halt tests/test_nreinas.pl
 ```
 
@@ -81,10 +81,12 @@ colocar(Libres, Puestas, Qs) :-
 * **Vecino**: se intercambian las filas de dos columnas al azar. Así el vecino
   sigue siendo una permutación.
 * **Aceptación (criterio de Metropolis)**: si el vecino es mejor o igual, se
-  acepta. Si es peor por `Δ`, se acepta con probabilidad `exp(−Δ/T)`. Con `T`
-  alta se acepta casi todo (explora); con `T` baja casi nada (explota).
+  acepta. Si es peor por `Δ`, se acepta con probabilidad `exp(−Δ/T)`. Con
+  temperatura alta aumenta la probabilidad de aceptar movimientos peores y se
+  explora más; con temperatura baja esa probabilidad disminuye y el algoritmo
+  se vuelve más conservador.
 * **Enfriamiento**: `T` empieza en 10 y se multiplica por `α` en cada
-  iteración. `α` se calcula para llegar a 0.01 justo al final del presupuesto:
+  iteración. `α` se calcula para llegar a 0.01 al completar el presupuesto:
   `α = (0.01/10)^(1/MaxIter)`.
 * **Fin**: cuando el costo llega a 0 (`solucion`) o se acaba el presupuesto
   (`presupuesto_agotado`). En el segundo caso devuelve el **mejor estado visto**
@@ -97,17 +99,107 @@ colocar(Libres, Puestas, Qs) :-
 * **No es completo**: puede terminar sin solución, y nunca puede afirmar que
   no existe ninguna. Con N = 3 simplemente se acaba el presupuesto.
 
-### Costo en O(N log N)
+### Complejidad algorítmica
 
-En vez de comparar todos los pares (O(N²)), se usa que dos reinas están en la
-misma diagonal si comparten `F + C` (una dirección) o `F − C` (la otra). Se
-calculan esas claves, se ordenan con `msort/2`, `clumped/2` cuenta los grupos
-iguales, y un grupo de K reinas aporta `K·(K−1)/2` pares.
+Las siguientes cotas describen el algoritmo implementado. Se distingue entre
+el costo de las operaciones del algoritmo y posibles sobrecostos internos del
+motor de Prolog.
+
+#### Backtracking
+
+**Complejidad temporal:**
+
+\[
+O(N! \cdot N)
+\]
+
+La configuración es una permutación de las N filas, por lo que existen como
+máximo `N!` configuraciones completas posibles. El árbol de búsqueda también
+contiene estados parciales; su cantidad total queda acotada por un múltiplo
+constante de `N!`.
+
+En cada estado, `select/3` puede recorrer una lista de hasta N elementos y
+`segura/3` puede comparar la reina candidata con hasta N−1 reinas ya
+colocadas. Por ello, el trabajo asociado a cada intento queda acotado por
+`O(N)`. Una cota superior conservadora para el tiempo es entonces
+`O(N! · N)`. La poda diagonal puede reducir mucho el trabajo real, pero no
+elimina el crecimiento factorial del peor caso.
+
+**Complejidad espacial auxiliar:**
+
+\[
+O(N)
+\]
+
+En el modelo algorítmico se conserva la configuración parcial, las filas
+disponibles y la profundidad recursiva, todas proporcionales a N. Esta cota
+describe el espacio de trabajo de la búsqueda por un camino. La memoria real
+de SWI-Prolog también incluye puntos de elección y estructuras retenidas para
+poder retroceder; por eso su consumo observado puede tener sobrecostos que
+esta cota abstracta no representa.
+
+#### Simulated annealing
+
+Sea `K` el máximo número de iteraciones (`MaxIter`).
+
+**Complejidad temporal:**
+
+\[
+O(K \cdot N\log N)
+\]
+
+El predicado `costo/2` construye las claves diagonales `F+C` y `F-C`, ordena
+cada lista con `msort/2` y agrupa claves iguales con `clumped/2`.
+
+* Construir las dos listas de claves requiere `O(N)`.
+* Ordenarlas requiere `O(N log N)`.
+* Agruparlas y sumar los pares en conflicto requiere `O(N)`.
+
+Por tanto, cada evaluación de `costo/2` cuesta `O(N log N)`. En cada
+iteración se genera un vecino y se evalúa su costo; la generación del vecino
+también requiere `O(N)` por las búsquedas y la reconstrucción de la lista.
+Así, el costo dominante por iteración es `O(N log N)` y, para un máximo de K
+iteraciones, el tiempo total es `O(K · N log N)`. Se realiza además una
+evaluación inicial del costo, que no cambia la cota asintótica.
+
+**Complejidad espacial auxiliar:**
+
+\[
+O(N)
+\]
+
+El estado actual, el vecino, el mejor estado y las listas de claves diagonales
+tienen tamaño proporcional a N. La historia de la visualización guarda una
+cantidad acotada de estados (aproximadamente 20 muestras, según el paso de
+muestreo), por lo que también ocupa `O(N)` espacio para esta implementación.
+
+#### Comparación
+
+| Característica | Backtracking | Simulated annealing |
+|---|---|---|
+| Tiempo | `O(N! · N)` | `O(K · N log N)` |
+| Espacio auxiliar algorítmico | `O(N)` | `O(N)` |
+| Tipo de búsqueda | Exhaustiva con poda | Heurística y probabilística |
+| Garantía de encontrar solución | Sí, si existe y la búsqueda termina | No |
+| Presupuesto configurable | No directamente | Sí, mediante `K` |
+
+Estas expresiones son cotas teóricas, no tiempos medidos. En simulated
+annealing el tiempo depende también del presupuesto K elegido. En el programa,
+`reinas_sa/3` usa `K = 1000·N`, mientras que el benchmark también prueba un
+presupuesto fijo de 1378 iteraciones.
+
+### Costo de una evaluación en O(N log N)
+
+En vez de comparar todos los pares de reinas (lo que costaría `O(N²)`), se
+aprovecha que dos reinas están en la misma diagonal si comparten `F + C`
+(una dirección) o `F − C` (la otra). Se calculan esas claves, se ordenan con
+`msort/2`, `clumped/2` cuenta los grupos iguales, y un grupo de K reinas aporta
+`K·(K−1)/2` pares en conflicto.
 
 ## Cambios al código de partida (Gemini)
 
 1. **`DeltaE <= 0` no compila.** En Prolog el operador es `=<`. Con `<=`,
-   swipl da `Syntax error: Operator expected` y el archivo no carga.
+   SWI-Prolog da `Syntax error: Operator expected` y el archivo no carga.
 2. **Error de precedencia en `attacks/5`.** El original escribe
    `( A ; B -> C ; D )`. Como `->` liga más fuerte que `;`, Prolog lo lee
    `A ; (B -> C ; D)` (comprobado con `write_canonical/1`). Si dos reinas están
@@ -117,13 +209,14 @@ iguales, y un grupo de K reinas aporta `K·(K−1)/2` pares.
 3. **N como parámetro.** El 8 estaba fijo en `between(1,8,_)`,
    `random_between(0,7,_)` y `random_between(1,8,_)`.
 4. **Permutaciones e intercambio** en vez de "cualquier fila en cada columna".
-   El espacio de búsqueda baja de Nᴺ a N! estados, y ya no hay choques por
+   El espacio de búsqueda baja de `Nᴺ` a `N!` estados, y ya no hay choques por
    fila.
 5. **Presupuesto de iteraciones explícito.** Con `T0 = 10`, `α = 0.995` y
    parar en `T < 0.01`, el original hace siempre unas **1378 iteraciones**
    (`ln(0.001)/ln(0.995)`), sea cual sea N.
 6. **Historia de estados** para la visualización. Se reemplazó XPCE por HTML,
    como sugirió el profesor.
+
 ## Visualización (`html_tablero.pl`)
 
 La página se describe como un término de Prolog con la DCG `html//1` de
@@ -143,14 +236,15 @@ No es una sola pregunta. Hay que fijar qué se mide:
   (92 para N = 8, 14 200 para N = 12), así que la comparación justa es
   **primera solución contra simulated annealing**.
 * **¿Con qué presupuesto?** Si simulated annealing tiene un número fijo de
-  iteraciones, fallar con N grande es culpa del presupuesto, no de la técnica.
-  Por eso se mide con el presupuesto fijo del original (1378) y con uno que
-  crece con N (1000·N).
+  iteraciones, fallar con N grande puede deberse a que el presupuesto no sea
+  suficiente. Por eso se mide con el presupuesto fijo del original (1378) y
+  con uno que crece con N (1000·N).
 * **¿Cuántas veces?** Simulated annealing es aleatorio: una corrida no dice
-  nada. Se hacen varias corridas con semillas fijas (reproducibles) y se
+  mucho. Se hacen varias corridas con semillas fijas (reproducibles) y se
   reporta el **porcentaje de éxito**.
 * **¿Tiempo o inferencias?** El tiempo depende de la máquina. Las
-  **inferencias** (llamadas a predicados) no, así que también se reportan.
+  **inferencias** (llamadas a predicados) ofrecen otra medida del trabajo
+  realizado por Prolog y permiten complementar los tiempos.
 * **Casos sin solución (N = 2, 3).** Backtracking lo demuestra; simulated
   annealing no puede.
 
@@ -161,8 +255,10 @@ Generados con `comparar.` (el archivo completo queda en `resultados.md`).
 * Backtracking: tiempo hasta la **primera** solución, con un límite de 10 s.
 * Simulated annealing (SA): 20 corridas por N, con las semillas 1 a 20.
   Se reporta el % de corridas que llegaron a costo 0 y el tiempo promedio.
-* Tiempos de reloj en nuestra máquina. Las inferencias son exactas y se
-  repiten igual en cualquier máquina.
+* Los tiempos de reloj corresponden a la máquina donde se ejecutó el
+  benchmark. Las inferencias dependen del programa y del recorrido realizado;
+  son más útiles para comparar ejecuciones de la misma implementación y
+  configuración que como una medida universal independiente del entorno.
 
 | N | Backtracking | ms | inferencias | SA 1378 it.: éxito | ms | SA 1000·N it.: éxito | ms | iteraciones usadas (prom.) |
 |---|---|---|---|---|---|---|---|---|
@@ -183,31 +279,34 @@ Generados con `comparar.` (el archivo completo queda en `resultados.md`).
 
 1. **Backtracking crece de forma explosiva.** De N = 12 a N = 24 las
    inferencias pasan de 12 mil a 56 millones (unas 4 700 veces más). Desde
-   N = 28 no termina en 10 s. Es el costo de recorrer el árbol de búsqueda en
-   orden: cuando una decisión temprana es mala, hay que deshacer mucho.
-2. **Simulated annealing escala mucho mejor, si se le da presupuesto.** Con
-   1000·N iteraciones resolvió las 20 corridas de cada N, hasta N = 64 (en
-   N = 64, 2.6 s por corrida en promedio). En la práctica usó entre 350·N (N = 12) y 600·N (N = 64) iteraciones, y cada una
-   cuesta O(N log N) por el cálculo del costo.
-3. **El punto de cruce está entre N = 16 y N = 20.** Con N ≤ 16 backtracking
-   es más rápido (25 ms contra 134 ms). Con N = 20 ya tarda 724 ms, contra
-   226 ms de SA.
-4. **Con presupuesto fijo, SA "se queda corto" a medida que crece N.** Con
-   las 1378 iteraciones del código original, el éxito baja de 100% (N = 8) a
-   0% (N = 64). No es un defecto de la técnica: N más grande necesita más
-   pasos. Esto muestra por qué hay que pensar qué significa "crecer N".
-5. **Solo backtracking puede decir "no hay solución".** Con N = 2 y 3
-   termina enseguida y falla (39 y 68 inferencias). SA gasta todo su
-   presupuesto y termina con costo > 0, sin poder distinguir entre "no
-   existe" y "no la encontré".
-6. **SA no es determinista; backtracking sí.** Backtracking siempre da la
-   misma primera solución con el mismo costo. SA depende de la semilla, por
-   eso se reportan porcentajes sobre 20 corridas y no una sola.
+   N = 28 no termina dentro del límite de 10 s. Es el costo de recorrer el
+   árbol de búsqueda en orden: cuando una decisión temprana es mala, hay que
+   deshacer mucho.
+2. **Simulated annealing escala mucho mejor en estas pruebas cuando se le da
+   presupuesto.** Con 1000·N iteraciones resolvió las 20 corridas de cada N,
+   hasta N = 64 (en N = 64, 2.6 s por corrida en promedio). En la práctica
+   usó entre 350·N (N = 12) y 600·N (N = 64) iteraciones, y cada una cuesta
+   `O(N log N)` por el cálculo del costo.
+3. **En estas pruebas, el punto de cruce está entre N = 16 y N = 20.** Con
+   N ≤ 16 backtracking es más rápido (25 ms contra 134 ms). Con N = 20 ya
+   tarda 724 ms, contra 226 ms de SA.
+4. **Con presupuesto fijo, SA encuentra menos soluciones a medida que crece
+   N.** Con las 1378 iteraciones del código original, el éxito baja de 100%
+   (N = 8) a 0% (N = 64). Esto muestra que el presupuesto elegido influye en
+   la tasa de éxito.
+5. **Solo backtracking puede demostrar que no hay solución.** Con N = 2 y 3
+   termina enseguida y falla (39 y 68 inferencias). SA termina su presupuesto
+   con costo mayor que 0, pero no puede distinguir entre "no existe" y "no la
+   encontré".
+6. **SA depende del azar; backtracking sigue un orden determinista.**
+   Backtracking siempre recorre las mismas alternativas en el mismo orden.
+   SA depende de la semilla, por eso se reportan porcentajes sobre 20 corridas.
 
 **En resumen:** backtracking conviene para N pequeños, para obtener todas
 las soluciones o para demostrar que no hay ninguna. Simulated annealing
-conviene para N grandes cuando basta con una solución, siempre que su
-presupuesto crezca con N.
+puede convenir para N grandes cuando basta con una solución, siempre que su
+presupuesto sea suficiente. Los resultados concretos dependen de la
+implementación, los parámetros y el entorno de ejecución.
 
 ## Uso de IA
 
@@ -215,6 +314,7 @@ Este extra se hizo con ayuda de IA, como lo permitió el profesor:
 
 * El código de partida es de **Gemini**, compartido por el profesor
   (`referencia/gemini_original.pl`).
-* La adaptación (corrección de errores, permutaciones, costo O(N log N),
-  benchmark, HTML, tests) y este README se hicieron con **Claude (Anthropic)**.* Nosotros lo revisamos, lo corrimos y lo estudiamos predicado por predicado
+* La adaptación (corrección de errores, permutaciones, costo `O(N log N)`,
+  benchmark, HTML, tests) y este README se hicieron con **Claude (Anthropic)**.
+* Nosotros lo revisamos, lo corrimos y lo estudiamos predicado por predicado
   para poder explicarlo y defenderlo.
