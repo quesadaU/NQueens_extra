@@ -158,9 +158,12 @@ cada lista con `msort/2` y agrupa claves iguales con `clumped/2`.
 Por tanto, cada evaluación de `costo/2` cuesta `O(N log N)`. En cada
 iteración se genera un vecino y se evalúa su costo; la generación del vecino
 también requiere `O(N)` por las búsquedas y la reconstrucción de la lista.
-Así, el costo dominante por iteración es `O(N log N)` y, para un máximo de K
-iteraciones, el tiempo total es `O(K · N log N)`. Se realiza además una
-evaluación inicial del costo, que no cambia la cota asintótica.
+Así, el análisis de las operaciones de esta implementación permite estimar un
+costo de `O(N log N)` por iteración y, para un máximo de K iteraciones, una
+complejidad temporal teórica de `O(K · N log N)`. Se realiza además una
+evaluación inicial del costo, que no cambia esa estimación asintótica. Esta
+expresión es un análisis del código, no una conclusión demostrada por las
+mediciones experimentales.
 
 **Complejidad espacial auxiliar:**
 
@@ -188,7 +191,7 @@ annealing el tiempo depende también del presupuesto K elegido. En el programa,
 `reinas_sa/3` usa `K = 1000·N`, mientras que el benchmark también prueba un
 presupuesto fijo de 1378 iteraciones.
 
-### Costo de una evaluación en O(N log N)
+### Análisis del costo de una evaluación
 
 En vez de comparar todos los pares de reinas (lo que costaría `O(N²)`), se
 aprovecha que dos reinas están en la misma diagonal si comparten `F + C`
@@ -284,9 +287,12 @@ Generados con `comparar.` (el archivo completo queda en `resultados.md`).
    deshacer mucho.
 2. **Simulated annealing escala mucho mejor en estas pruebas cuando se le da
    presupuesto.** Con 1000·N iteraciones resolvió las 20 corridas de cada N,
-   hasta N = 64 (en N = 64, 2.6 s por corrida en promedio). En la práctica
-   usó entre 350·N (N = 12) y 600·N (N = 64) iteraciones, y cada una cuesta
-   `O(N log N)` por el cálculo del costo.
+   hasta N = 64 (en N = 64, 2.6 s por corrida en promedio). El análisis del
+   cálculo del costo sugiere un crecimiento teórico de `O(N log N)` por
+   iteración. Las mediciones muestran una tendencia que se aproxima bastante
+   a ese comportamiento, pero el rango de valores probado no es suficiente
+   para demostrar experimentalmente esa complejidad con precisión ni para
+   confirmarla como una ley de crecimiento.
 3. **En estas pruebas, el punto de cruce está entre N = 16 y N = 20.** Con
    N ≤ 16 backtracking es más rápido (25 ms contra 134 ms). Con N = 20 ya
    tarda 724 ms, contra 226 ms de SA.
@@ -314,7 +320,8 @@ Este extra se hizo con ayuda de IA, como lo permitió el profesor:
 
 * El código de partida es de **Gemini**, compartido por el profesor
   (`referencia/gemini_original.pl`).
-* La adaptación (corrección de errores, permutaciones, costo `O(N log N)`,
-  benchmark, HTML, tests) y este README se hicieron con **Claude (Anthropic)**.
+* La adaptación (corrección de errores, permutaciones, optimización del
+  cálculo del costo, benchmark, HTML, tests) y este README se hicieron con
+  **Claude (Anthropic)**.
 * Nosotros lo revisamos, lo corrimos y lo estudiamos predicado por predicado
   para poder explicarlo y defenderlo.
