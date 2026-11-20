@@ -1,0 +1,16 @@
+{
+  "fecha": "2026-11-19T22:30:21",
+  "swipl": "SWI-Prolog version 10.0.2 for x64-win64",
+  "python": "3.11.9",
+  "matplotlib": "3.10.7",
+  "numpy": "2.3.4",
+  "so": "Windows-10-10.0.26200-SP0",
+  "procesador": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+  "git_commit": "dfed90c",
+  "cpu": "AMD Ryzen 7 7730U with Radeon Graphics",
+  "nucleos": "8",
+  "hilos": "16",
+  "mhz_nominal": "2000",
+  "ram_gb": "15.3",
+  "plan_energia": "Equilibrado"
+}
